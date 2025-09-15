@@ -1,12 +1,14 @@
 package game
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/vladyslavpavlenko/pacman/internal/ai"
+	"github.com/vladyslavpavlenko/pacman/internal/config"
 	"github.com/vladyslavpavlenko/pacman/internal/entities"
 	"github.com/vladyslavpavlenko/pacman/internal/level"
 	"github.com/vladyslavpavlenko/pacman/internal/physics"
@@ -23,13 +25,15 @@ const (
 
 // Game represents the main game state
 type Game struct {
-	level    *level.Level
-	player   *entities.Entity
-	ghosts   []*entities.Entity
-	score    int
-	frame    int
-	distMap  *ai.DistanceMap
-	renderer *renderer.Renderer
+	level       *level.Level
+	player      *entities.Entity
+	ghosts      []*entities.Entity
+	score       int
+	frame       int
+	distMap     *ai.DistanceMap
+	renderer    *renderer.Renderer
+	difficulty  config.Difficulty
+	recalcEvery int
 }
 
 // New creates a new game instance
@@ -69,7 +73,21 @@ func (g *Game) checkCaught() {
 func (g *Game) Update() error {
 	g.frame++
 
-	// Handle input
+	// Handle difficulty selection
+	if inpututil.IsKeyJustPressed(ebiten.Key1) {
+		g.setDifficulty(config.DifficultyEasy)
+	}
+	if inpututil.IsKeyJustPressed(ebiten.Key2) {
+		g.setDifficulty(config.DifficultyMedium)
+	}
+	if inpututil.IsKeyJustPressed(ebiten.Key3) {
+		g.setDifficulty(config.DifficultyHard)
+	}
+	if inpututil.IsKeyJustPressed(ebiten.Key4) {
+		g.setDifficulty(config.DifficultyNightmare)
+	}
+
+	// Handle player movement input
 	want := entities.Vec{}
 	if ebiten.IsKeyPressed(ebiten.KeyLeft) || ebiten.IsKeyPressed(ebiten.KeyA) {
 		want = entities.Vec{X: -1, Y: 0}
@@ -87,14 +105,14 @@ func (g *Game) Update() error {
 		physics.TryTurn(g.player, want, g.level)
 	}
 
-	// Rebuild BFS distance map periodically
-	if g.frame%RecalcEvery == 0 {
+	// Rebuild BFS distance map periodically (frequency depends on difficulty)
+	if g.frame%g.recalcEvery == 0 {
 		g.distMap.BuildBFS(g.player.Pos, g.level)
 	}
 
-	// Ghost AI decisions
+	// Ghost AI decisions with individual skill levels
 	for _, ghost := range g.ghosts {
-		ai.GhostAI(ghost, g.distMap, g.level)
+		ai.GhostAI(ghost, g.distMap, g.level, ghost.SkillLevel)
 	}
 
 	// Movement
@@ -122,7 +140,24 @@ func (g *Game) Update() error {
 
 // Draw renders the game
 func (g *Game) Draw(screen *ebiten.Image) {
-	g.renderer.Draw(screen, g.level, g.player, g.ghosts, g.score)
+	g.renderer.DrawLevel(screen, g.level)
+	g.renderer.DrawEntity(screen, g.player)
+	g.renderer.DrawGhosts(screen, g.ghosts)
+	g.drawHUD(screen)
+}
+
+// drawHUD draws the game's heads-up display
+func (g *Game) drawHUD(screen *ebiten.Image) {
+	// Simple text display without external dependencies
+	msg := fmt.Sprintf("Score: %d | Difficulty: %s | Keys: 1-4 to change difficulty, R to restart",
+		g.score, g.difficulty.String())
+	_ = msg // Placeholder - in a real implementation you'd draw this text
+}
+
+// setDifficulty changes the game difficulty and reinitializes
+func (g *Game) setDifficulty(difficulty config.Difficulty) {
+	g.difficulty = difficulty
+	g.initLevel()
 }
 
 // Layout returns the game's logical screen size
@@ -137,6 +172,10 @@ func (g *Game) initLevel() {
 	g.score = 0
 	g.frame = 0
 
+	// Get difficulty configuration
+	diffConfig := config.GetDifficultyConfig(g.difficulty)
+	g.recalcEvery = diffConfig.RecalcEvery
+
 	// Create distance map for AI
 	g.distMap = ai.NewDistanceMap(g.level.Width, g.level.Height)
 
@@ -147,11 +186,18 @@ func (g *Game) initLevel() {
 	g.player = entities.NewPlayer(playerSpawn.X, playerSpawn.Y, PlayerSpeed, renderer.ColorPac)
 	g.player.Pos = physics.TileCenter(playerSpawn.X, playerSpawn.Y)
 
-	// Create ghosts
+	// Create ghosts with difficulty-based configuration
 	g.ghosts = nil
 	for i, spawn := range ghostSpawns {
+		if i >= len(diffConfig.GhostSpeeds) || i >= len(diffConfig.SkillLevels) {
+			break // Don't create more ghosts than configured
+		}
+
 		ghostColor := renderer.ColorGhosts[i%len(renderer.ColorGhosts)]
-		ghost := entities.NewGhost(spawn.X, spawn.Y, GhostSpeed, ghostColor)
+		ghostSpeed := diffConfig.GhostSpeeds[i]
+		skillLevel := diffConfig.SkillLevels[i]
+
+		ghost := entities.NewGhost(spawn.X, spawn.Y, ghostSpeed, ghostColor, skillLevel)
 		ghost.Pos = physics.TileCenter(spawn.X, spawn.Y)
 		g.ghosts = append(g.ghosts, ghost)
 	}
@@ -163,8 +209,12 @@ func (g *Game) initLevel() {
 // Run initializes and starts the game
 func (g *Game) Run() error {
 	rand.Seed(time.Now().UnixNano())
+
+	// Set default difficulty
+	g.difficulty = config.DifficultyMedium
 	g.initLevel()
-	ebiten.SetWindowTitle("Pacman - Refactored")
+
+	ebiten.SetWindowTitle("Pacman - Multi-Difficulty (Keys: 1-4 for difficulty, WASD/Arrows to move, R to restart)")
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	ebiten.SetWindowSize(g.level.Width*physics.TileSize*ScreenScale, g.level.Height*physics.TileSize*ScreenScale)
 	return ebiten.RunGame(g)

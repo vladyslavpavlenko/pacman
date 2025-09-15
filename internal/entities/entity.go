@@ -3,6 +3,8 @@ package entities
 import (
 	"image/color"
 	"math"
+
+	"github.com/vladyslavpavlenko/pacman/internal/config"
 )
 
 // Vec represents a 2D vector with float64 coordinates
@@ -51,34 +53,40 @@ type IVec struct {
 
 // Entity represents a game entity (player or ghost)
 type Entity struct {
-	Pos       Vec        // pixel center position
-	Dir       Vec        // normalized grid direction (up/down/left/right or zero)
-	WantDir   Vec        // desired direction from input/AI
-	Speed     float64    // movement speed in pixels per frame
-	Color     color.RGBA // entity color
-	SpawnTile IVec       // spawn tile coordinates
+	Pos        Vec                    // pixel center position
+	Dir        Vec                    // normalized grid direction (up/down/left/right or zero)
+	WantDir    Vec                    // desired direction from input/AI
+	Speed      float64                // movement speed in pixels per frame
+	Color      color.RGBA             // entity color
+	SpawnTile  IVec                   // spawn tile coordinates
+	SkillLevel config.GhostSkillLevel // AI skill level (only used for ghosts)
+	IsPlayer   bool                   // true if this is the player entity
 }
 
 // NewPlayer creates a new player entity
 func NewPlayer(spawnX, spawnY int, speed float64, color color.RGBA) *Entity {
 	return &Entity{
-		Pos:       Vec{},
-		Dir:       Vec{},
-		WantDir:   Vec{},
-		Speed:     speed,
-		Color:     color,
-		SpawnTile: IVec{spawnX, spawnY},
+		Pos:        Vec{},
+		Dir:        Vec{},
+		WantDir:    Vec{},
+		Speed:      speed,
+		Color:      color,
+		SpawnTile:  IVec{spawnX, spawnY},
+		SkillLevel: config.SkillLevelNormal, // Not used for player
+		IsPlayer:   true,
 	}
 }
 
-// NewGhost creates a new ghost entity
-func NewGhost(spawnX, spawnY int, speed float64, color color.RGBA) *Entity {
+// NewGhost creates a new ghost entity with specified skill level
+func NewGhost(spawnX, spawnY int, speed float64, color color.RGBA, skillLevel config.GhostSkillLevel) *Entity {
 	return &Entity{
-		Pos:       Vec{},
-		Dir:       Vec{},
-		WantDir:   Vec{},
-		Speed:     speed,
-		Color:     color,
-		SpawnTile: IVec{spawnX, spawnY},
+		Pos:        Vec{},
+		Dir:        Vec{},
+		WantDir:    Vec{},
+		Speed:      speed,
+		Color:      color,
+		SpawnTile:  IVec{spawnX, spawnY},
+		SkillLevel: skillLevel,
+		IsPlayer:   false,
 	}
 }
