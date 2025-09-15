@@ -3,8 +3,9 @@ package physics
 import (
 	"math"
 
-	"github.com/vladyslavpavlenko/pacman/internal/entities"
-	"github.com/vladyslavpavlenko/pacman/internal/level"
+	"github.com/vladyslavpavlenko/pacman/internal/logic/entities"
+	"github.com/vladyslavpavlenko/pacman/internal/types"
+	"github.com/vladyslavpavlenko/pacman/internal/visual/level"
 )
 
 const (
@@ -12,27 +13,27 @@ const (
 )
 
 // TileCenter returns the pixel center coordinates of a tile
-func TileCenter(tileX, tileY int) entities.Vec {
-	return entities.Vec{
+func TileCenter(tileX, tileY int) types.Vector {
+	return types.Vector{
 		X: float64(tileX*TileSize + TileSize/2),
 		Y: float64(tileY*TileSize + TileSize/2),
 	}
 }
 
 // PosToTile converts pixel coordinates to tile coordinates
-func PosToTile(pos entities.Vec) (tileX, tileY int) {
+func PosToTile(pos types.Vector) (tileX, tileY int) {
 	return int(pos.X) / TileSize, int(pos.Y) / TileSize
 }
 
 // NearCenter checks if a position is near the center of its tile
-func NearCenter(pos entities.Vec) bool {
+func NearCenter(pos types.Vector) bool {
 	tileX, tileY := PosToTile(pos)
 	center := TileCenter(tileX, tileY)
 	return math.Abs(pos.X-center.X) <= 1.0 && math.Abs(pos.Y-center.Y) <= 1.0
 }
 
 // TryTurn attempts to turn an entity in the desired direction
-func TryTurn(entity *entities.Entity, wantDir entities.Vec, lvl *level.Level) {
+func TryTurn(entity *entities.Entity, wantDir types.Vector, lvl *level.Level) {
 	if wantDir.Eq(entity.Dir) || (wantDir.X == 0 && wantDir.Y == 0) {
 		return
 	}
@@ -61,7 +62,7 @@ func StepMove(entity *entities.Entity, lvl *level.Level) {
 		TryTurn(entity, entity.WantDir, lvl)
 	}
 
-	if entity.Dir.Eq(entities.Vec{}) {
+	if entity.Dir.Eq(types.Vector{}) {
 		return
 	}
 
@@ -84,7 +85,7 @@ func StepMove(entity *entities.Entity, lvl *level.Level) {
 		if entity.Dir.Y != 0 {
 			entity.Pos.Y = center.Y
 		}
-		entity.Dir = entities.Vec{}
+		entity.Dir = types.Vector{}
 		return
 	}
 
@@ -94,8 +95,8 @@ func StepMove(entity *entities.Entity, lvl *level.Level) {
 // ResetEntityPosition resets an entity to its spawn position
 func ResetEntityPosition(entity *entities.Entity) {
 	entity.Pos = TileCenter(entity.SpawnTile.X, entity.SpawnTile.Y)
-	entity.Dir = entities.Vec{}
-	entity.WantDir = entities.Vec{}
+	entity.Dir = types.Vector{}
+	entity.WantDir = types.Vector{}
 }
 
 // CheckCollision checks if two entities are colliding within the given radius

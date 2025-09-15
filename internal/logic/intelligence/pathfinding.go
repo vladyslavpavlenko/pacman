@@ -1,12 +1,13 @@
-package ai
+package intelligence
 
 import (
 	"math/rand"
 
 	"github.com/vladyslavpavlenko/pacman/internal/config"
-	"github.com/vladyslavpavlenko/pacman/internal/entities"
-	"github.com/vladyslavpavlenko/pacman/internal/level"
-	"github.com/vladyslavpavlenko/pacman/internal/physics"
+	"github.com/vladyslavpavlenko/pacman/internal/logic/entities"
+	"github.com/vladyslavpavlenko/pacman/internal/logic/physics"
+	"github.com/vladyslavpavlenko/pacman/internal/types"
+	"github.com/vladyslavpavlenko/pacman/internal/visual/level"
 )
 
 // DistanceMap represents a 2D grid of distances from a target position
@@ -32,7 +33,7 @@ func NewDistanceMap(width, height int) *DistanceMap {
 }
 
 // BuildBFS builds a breadth-first search distance map from the target position
-func (dm *DistanceMap) BuildBFS(targetPos entities.Vec, lvl *level.Level) {
+func (dm *DistanceMap) BuildBFS(targetPos types.Vector, lvl *level.Level) {
 	// Initialize all distances to infinity
 	const infinity = 1 << 30
 	for y := 0; y < dm.height; y++ {
@@ -52,7 +53,7 @@ func (dm *DistanceMap) BuildBFS(targetPos entities.Vec, lvl *level.Level) {
 	dm.distances[targetY][targetX] = 0
 	head := 0
 
-	directions := []entities.IVec{
+	directions := []types.Tile{
 		{X: 1, Y: 0},  // right
 		{X: -1, Y: 0}, // left
 		{X: 0, Y: 1},  // down
@@ -93,23 +94,21 @@ func (dm *DistanceMap) GetDistance(tileX, tileY int) int {
 
 // candidate represents a possible movement direction with its distance
 type candidate struct {
-	dir      entities.Vec
+	dir      types.Vector
 	distance int
 }
 
 // GhostAI implements the ghost artificial intelligence with different skill levels
-func GhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Level, skillLevel config.GhostSkillLevel) {
+func GhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Level, skillLevel config.GhostLevel) {
 	switch skillLevel {
-	case config.SkillLevelDumb:
+	case config.GhostSkillLevelDumb:
 		dumbGhostAI(ghost, lvl)
-	case config.SkillLevelSlow:
+	case config.GhostSkillLevelSlow:
 		slowGhostAI(ghost, distanceMap, lvl)
-	case config.SkillLevelNormal:
+	case config.GhostSkillLevelNormal:
 		normalGhostAI(ghost, distanceMap, lvl)
-	case config.SkillLevelSmart:
+	case config.GhostSkillLevelSmart:
 		smartGhostAI(ghost, distanceMap, lvl)
-	case config.SkillLevelGenius:
-		geniusGhostAI(ghost, distanceMap, lvl)
 	default:
 		normalGhostAI(ghost, distanceMap, lvl)
 	}
@@ -118,18 +117,18 @@ func GhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Level,
 // dumbGhostAI implements random movement (ignores player)
 func dumbGhostAI(ghost *entities.Entity, lvl *level.Level) {
 	// Only make decisions at intersections or when stopped
-	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(entities.Vec{}) {
+	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(types.Vector{}) {
 		return
 	}
 
 	tileX, tileY := physics.PosToTile(ghost.Pos)
 
 	// Get all walkable directions
-	var directions []entities.Vec
+	var directions []types.Vector
 	checkDirection := func(dx, dy float64) {
 		nextX, nextY := tileX+int(dx), tileY+int(dy)
 		if lvl.CanWalk(nextX, nextY) {
-			directions = append(directions, entities.Vec{X: dx, Y: dy})
+			directions = append(directions, types.Vector{X: dx, Y: dy})
 		}
 	}
 
@@ -139,7 +138,7 @@ func dumbGhostAI(ghost *entities.Entity, lvl *level.Level) {
 	checkDirection(0, -1) // up
 
 	if len(directions) == 0 {
-		ghost.Dir = entities.Vec{}
+		ghost.Dir = types.Vector{}
 		return
 	}
 
@@ -153,7 +152,7 @@ func dumbGhostAI(ghost *entities.Entity, lvl *level.Level) {
 // slowGhostAI implements AI that follows player but makes mistakes
 func slowGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Level) {
 	// Only make decisions at intersections or when stopped
-	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(entities.Vec{}) {
+	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(types.Vector{}) {
 		return
 	}
 
@@ -170,7 +169,7 @@ func slowGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Le
 // smartGhostAI implements optimized pathfinding with some prediction
 func smartGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Level) {
 	// Only make decisions at intersections or when stopped
-	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(entities.Vec{}) {
+	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(types.Vector{}) {
 		return
 	}
 
@@ -186,7 +185,7 @@ func smartGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.L
 			// Smart ghosts prefer directions that don't lead to dead ends
 			// Check if the next position has multiple exits
 			exitCount := 0
-			for _, checkDir := range []entities.IVec{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
+			for _, checkDir := range []types.Tile{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
 				if lvl.CanWalk(nextX+checkDir.X, nextY+checkDir.Y) {
 					exitCount++
 				}
@@ -196,7 +195,7 @@ func smartGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.L
 				distance += 5 // Penalty for dead ends
 			}
 			options = append(options, candidate{
-				dir:      entities.Vec{X: dx, Y: dy},
+				dir:      types.Vector{X: dx, Y: dy},
 				distance: distance,
 			})
 		}
@@ -208,7 +207,7 @@ func smartGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.L
 	checkDirection(0, -1) // up
 
 	if len(options) == 0 {
-		ghost.Dir = entities.Vec{}
+		ghost.Dir = types.Vector{}
 		return
 	}
 
@@ -238,7 +237,7 @@ func smartGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.L
 // geniusGhostAI implements advanced AI with player movement prediction
 func geniusGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Level) {
 	// Only make decisions at intersections or when stopped
-	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(entities.Vec{}) {
+	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(types.Vector{}) {
 		return
 	}
 
@@ -261,7 +260,7 @@ func geniusGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.
 
 			// Avoid dead ends even more aggressively
 			exitCount := 0
-			for _, checkDir := range []entities.IVec{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
+			for _, checkDir := range []types.Tile{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
 				if lvl.CanWalk(nextX+checkDir.X, nextY+checkDir.Y) {
 					exitCount++
 				}
@@ -273,7 +272,7 @@ func geniusGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.
 			}
 
 			options = append(options, candidate{
-				dir:      entities.Vec{X: dx, Y: dy},
+				dir:      types.Vector{X: dx, Y: dy},
 				distance: distance,
 			})
 		}
@@ -285,7 +284,7 @@ func geniusGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.
 	checkDirection(0, -1) // up
 
 	if len(options) == 0 {
-		ghost.Dir = entities.Vec{}
+		ghost.Dir = types.Vector{}
 		return
 	}
 
@@ -328,7 +327,7 @@ func geniusGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.
 // normalGhostAI implements standard BFS pathfinding
 func normalGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Level) {
 	// Only make decisions at intersections or when stopped
-	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(entities.Vec{}) {
+	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(types.Vector{}) {
 		return
 	}
 
@@ -342,7 +341,7 @@ func normalGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.
 		if lvl.CanWalk(nextX, nextY) {
 			distance := distanceMap.GetDistance(nextX, nextY)
 			options = append(options, candidate{
-				dir:      entities.Vec{X: dx, Y: dy},
+				dir:      types.Vector{X: dx, Y: dy},
 				distance: distance,
 			})
 		}
@@ -354,7 +353,7 @@ func normalGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.
 	checkDirection(0, -1) // up
 
 	if len(options) == 0 {
-		ghost.Dir = entities.Vec{}
+		ghost.Dir = types.Vector{}
 		return
 	}
 

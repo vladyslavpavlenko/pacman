@@ -1,6 +1,8 @@
 package level
 
-import "github.com/vladyslavpavlenko/pacman/internal/entities"
+import (
+	"github.com/vladyslavpavlenko/pacman/internal/types"
+)
 
 // Tile represents a single tile type in the game
 type Tile byte
@@ -99,9 +101,9 @@ func (l *Level) ConsumePellet(x, y int) bool {
 }
 
 // GetDefaultSpawnPoints returns the default spawn points for player and ghosts
-func (l *Level) GetDefaultSpawnPoints() (playerSpawn entities.IVec, ghostSpawns []entities.IVec) {
-	playerSpawn = entities.IVec{X: 1, Y: 1}
-	ghostSpawns = []entities.IVec{
+func (l *Level) GetDefaultSpawnPoints() (playerSpawn types.Tile, ghostSpawns []types.Tile) {
+	playerSpawn = types.Tile{X: 1, Y: 1}
+	ghostSpawns = []types.Tile{
 		{X: l.Width - 2, Y: 1},
 		{X: l.Width - 2, Y: l.Height - 2},
 		{X: 1, Y: l.Height - 2},

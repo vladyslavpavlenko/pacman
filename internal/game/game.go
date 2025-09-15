@@ -7,12 +7,14 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"github.com/vladyslavpavlenko/pacman/internal/ai"
 	"github.com/vladyslavpavlenko/pacman/internal/config"
-	"github.com/vladyslavpavlenko/pacman/internal/entities"
-	"github.com/vladyslavpavlenko/pacman/internal/level"
-	"github.com/vladyslavpavlenko/pacman/internal/physics"
-	"github.com/vladyslavpavlenko/pacman/internal/renderer"
+	"github.com/vladyslavpavlenko/pacman/internal/logic/entities"
+	"github.com/vladyslavpavlenko/pacman/internal/logic/intelligence"
+	"github.com/vladyslavpavlenko/pacman/internal/logic/physics"
+	"github.com/vladyslavpavlenko/pacman/internal/types"
+	"github.com/vladyslavpavlenko/pacman/internal/visual/level"
+	"github.com/vladyslavpavlenko/pacman/internal/visual/menu"
+	"github.com/vladyslavpavlenko/pacman/internal/visual/renderer"
 )
 
 const (
@@ -30,16 +32,22 @@ type Game struct {
 	ghosts      []*entities.Entity
 	score       int
 	frame       int
-	distMap     *ai.DistanceMap
+	distMap     *intelligence.DistanceMap
 	renderer    *renderer.Renderer
 	difficulty  config.Difficulty
 	recalcEvery int
+	menu        *menu.Menu
+	gameState   menu.GameState
+	shouldExit  bool
 }
 
 // New creates a new game instance
 func New() *Game {
 	return &Game{
-		renderer: renderer.New(),
+		renderer:   renderer.New(),
+		menu:       menu.New(),
+		gameState:  menu.StateMenu,
+		shouldExit: false,
 	}
 }
 
@@ -71,37 +79,50 @@ func (g *Game) checkCaught() {
 
 // Update handles game logic updates
 func (g *Game) Update() error {
+	// Handle menu state
+	if g.gameState == menu.StateMenu {
+		newState, selectedDiff, shouldExit := g.menu.Update()
+		if shouldExit && newState == menu.StateMenu {
+			// Exit game
+			g.shouldExit = true
+			return nil
+		}
+		if newState == menu.StatePlaying {
+			g.gameState = menu.StatePlaying
+			g.difficulty = selectedDiff
+			g.initLevel()
+		}
+		return nil
+	}
+
+	// Handle ESC key to return to menu
+	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+		g.gameState = menu.StateMenu
+		return nil
+	}
+
+	// Game logic only runs when playing
+	if g.gameState != menu.StatePlaying {
+		return nil
+	}
+
 	g.frame++
 
-	// Handle difficulty selection
-	if inpututil.IsKeyJustPressed(ebiten.Key1) {
-		g.setDifficulty(config.DifficultyEasy)
-	}
-	if inpututil.IsKeyJustPressed(ebiten.Key2) {
-		g.setDifficulty(config.DifficultyMedium)
-	}
-	if inpututil.IsKeyJustPressed(ebiten.Key3) {
-		g.setDifficulty(config.DifficultyHard)
-	}
-	if inpututil.IsKeyJustPressed(ebiten.Key4) {
-		g.setDifficulty(config.DifficultyNightmare)
-	}
-
 	// Handle player movement input
-	want := entities.Vec{}
+	want := types.Vector{}
 	if ebiten.IsKeyPressed(ebiten.KeyLeft) || ebiten.IsKeyPressed(ebiten.KeyA) {
-		want = entities.Vec{X: -1, Y: 0}
+		want = types.Vector{X: -1, Y: 0}
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyRight) || ebiten.IsKeyPressed(ebiten.KeyD) {
-		want = entities.Vec{X: 1, Y: 0}
+		want = types.Vector{X: 1, Y: 0}
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyUp) || ebiten.IsKeyPressed(ebiten.KeyW) {
-		want = entities.Vec{X: 0, Y: -1}
+		want = types.Vector{X: 0, Y: -1}
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyDown) || ebiten.IsKeyPressed(ebiten.KeyS) {
-		want = entities.Vec{X: 0, Y: 1}
+		want = types.Vector{X: 0, Y: 1}
 	}
-	if !want.Eq(entities.Vec{}) {
+	if !want.Eq(types.Vector{}) {
 		physics.TryTurn(g.player, want, g.level)
 	}
 
@@ -112,7 +133,7 @@ func (g *Game) Update() error {
 
 	// Ghost AI decisions with individual skill levels
 	for _, ghost := range g.ghosts {
-		ai.GhostAI(ghost, g.distMap, g.level, ghost.SkillLevel)
+		intelligence.GhostAI(ghost, g.distMap, g.level, ghost.SkillLevel)
 	}
 
 	// Movement
@@ -138,20 +159,27 @@ func (g *Game) Update() error {
 	return nil
 }
 
-// Draw renders the game
 func (g *Game) Draw(screen *ebiten.Image) {
-	g.renderer.DrawLevel(screen, g.level)
-	g.renderer.DrawEntity(screen, g.player)
-	g.renderer.DrawGhosts(screen, g.ghosts)
-	g.drawHUD(screen)
+	if g.gameState == menu.StateMenu {
+		// Draw menu
+		screenWidth, screenHeight := screen.Bounds().Dx(), screen.Bounds().Dy()
+		g.renderer.DrawMenu(screen, g.menu, screenWidth, screenHeight)
+	} else if g.gameState == menu.StatePlaying {
+		// Draw game
+		g.renderer.DrawLevel(screen, g.level)
+		g.renderer.DrawEntity(screen, g.player)
+		g.renderer.DrawGhosts(screen, g.ghosts)
+		g.drawHUD(screen)
+	}
 }
 
 // drawHUD draws the game's heads-up display
 func (g *Game) drawHUD(screen *ebiten.Image) {
-	// Simple text display without external dependencies
-	msg := fmt.Sprintf("Score: %d | Difficulty: %s | Keys: 1-4 to change difficulty, R to restart",
+	// Draw HUD text using the renderer's text system
+	msg := fmt.Sprintf("Score: %d | Difficulty: %s | R to restart, ESC for menu",
 		g.score, g.difficulty.String())
-	_ = msg // Placeholder - in a real implementation you'd draw this text
+
+	g.renderer.TextRenderer.DrawText(screen, msg, 10, 20, renderer.ColorMenuText, 16)
 }
 
 // setDifficulty changes the game difficulty and reinitializes
@@ -162,7 +190,16 @@ func (g *Game) setDifficulty(difficulty config.Difficulty) {
 
 // Layout returns the game's logical screen size
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
-	return g.level.Width * physics.TileSize, g.level.Height * physics.TileSize
+	if g.gameState == menu.StateMenu {
+		// For menu, use the actual window size
+		return outsideWidth, outsideHeight
+	}
+	// For game, use level-based size
+	if g.level != nil {
+		return g.level.Width * physics.TileSize, g.level.Height * physics.TileSize
+	}
+	// Fallback
+	return outsideWidth, outsideHeight
 }
 
 // initLevel initializes the game level and entities
@@ -177,7 +214,7 @@ func (g *Game) initLevel() {
 	g.recalcEvery = diffConfig.RecalcEvery
 
 	// Create distance map for AI
-	g.distMap = ai.NewDistanceMap(g.level.Width, g.level.Height)
+	g.distMap = intelligence.NewDistanceMap(g.level.Width, g.level.Height)
 
 	// Get spawn points
 	playerSpawn, ghostSpawns := g.level.GetDefaultSpawnPoints()
@@ -206,16 +243,25 @@ func (g *Game) initLevel() {
 	g.distMap.BuildBFS(g.player.Pos, g.level)
 }
 
-// Run initializes and starts the game
 func (g *Game) Run() error {
 	rand.Seed(time.Now().UnixNano())
 
 	// Set default difficulty
 	g.difficulty = config.DifficultyMedium
-	g.initLevel()
 
-	ebiten.SetWindowTitle("Pacman - Multi-Difficulty (Keys: 1-4 for difficulty, WASD/Arrows to move, R to restart)")
+	ebiten.SetWindowTitle("Pacman - Main Menu (WASD/Arrows to navigate, Enter to select, ESC to return to menu)")
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
-	ebiten.SetWindowSize(g.level.Width*physics.TileSize*ScreenScale, g.level.Height*physics.TileSize*ScreenScale)
-	return ebiten.RunGame(g)
+
+	// Set a reasonable default window size for the menu
+	ebiten.SetWindowSize(800, 600)
+
+	// Run the game loop
+	err := ebiten.RunGame(g)
+
+	// Check if we should exit
+	if g.shouldExit {
+		return nil
+	}
+
+	return err
 }
