@@ -3,9 +3,8 @@ package physics
 import (
 	"math"
 
-	"github.com/vladyslavpavlenko/pacman/internal/logic/entities"
+	"github.com/vladyslavpavlenko/pacman/internal/model"
 	"github.com/vladyslavpavlenko/pacman/internal/types"
-	"github.com/vladyslavpavlenko/pacman/internal/visual/level"
 )
 
 const (
@@ -33,7 +32,7 @@ func NearCenter(pos types.Vector) bool {
 }
 
 // TryTurn attempts to turn an entity in the desired direction
-func TryTurn(entity *entities.Entity, wantDir types.Vector, lvl *level.Level) {
+func TryTurn(entity *model.Entity, wantDir types.Vector, lvl *model.Level) {
 	if wantDir.Eq(entity.Dir) || (wantDir.X == 0 && wantDir.Y == 0) {
 		return
 	}
@@ -56,7 +55,7 @@ func TryTurn(entity *entities.Entity, wantDir types.Vector, lvl *level.Level) {
 }
 
 // StepMove moves an entity one step in its current direction
-func StepMove(entity *entities.Entity, lvl *level.Level) {
+func StepMove(entity *model.Entity, lvl *model.Level) {
 	// If we have a pending desired direction and can take it at center, try it
 	if !entity.WantDir.Eq(entity.Dir) && NearCenter(entity.Pos) {
 		TryTurn(entity, entity.WantDir, lvl)
@@ -69,11 +68,8 @@ func StepMove(entity *entities.Entity, lvl *level.Level) {
 	// Calculate next position
 	next := entity.Pos.Add(entity.Dir.Mul(entity.Speed))
 
-	// Check collision ahead
-	nextTileX, nextTileY := PosToTile(next)
-
-	// When crossing tile boundary, ensure the next tile is walkable
-	if !lvl.CanWalk(nextTileX, nextTileY) {
+	// Check collision with proper hitbox
+	if !CanMoveTo(next, lvl) {
 		// Clamp to boundary and stop
 		// Snap to current tile center along blocked axis
 		currentTileX, currentTileY := PosToTile(entity.Pos)
@@ -92,14 +88,38 @@ func StepMove(entity *entities.Entity, lvl *level.Level) {
 	entity.Pos = next
 }
 
+// CanMoveTo checks if an entity can move to a position considering hitbox
+func CanMoveTo(pos types.Vector, lvl *model.Level) bool {
+	// Define hitbox size (smaller than tile size to allow movement in corridors)
+	hitboxSize := float64(TileSize) * 0.8 // 80% of tile size
+
+	// Check corners of the hitbox
+	corners := []types.Vector{
+		{X: pos.X - hitboxSize/2, Y: pos.Y - hitboxSize/2}, // top-left
+		{X: pos.X + hitboxSize/2, Y: pos.Y - hitboxSize/2}, // top-right
+		{X: pos.X - hitboxSize/2, Y: pos.Y + hitboxSize/2}, // bottom-left
+		{X: pos.X + hitboxSize/2, Y: pos.Y + hitboxSize/2}, // bottom-right
+	}
+
+	// Check if all corners are in walkable tiles
+	for _, corner := range corners {
+		tileX, tileY := PosToTile(corner)
+		if !lvl.CanWalk(tileX, tileY) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // ResetEntityPosition resets an entity to its spawn position
-func ResetEntityPosition(entity *entities.Entity) {
+func ResetEntityPosition(entity *model.Entity) {
 	entity.Pos = TileCenter(entity.SpawnTile.X, entity.SpawnTile.Y)
 	entity.Dir = types.Vector{}
 	entity.WantDir = types.Vector{}
 }
 
 // CheckCollision checks if two entities are colliding within the given radius
-func CheckCollision(entity1, entity2 *entities.Entity, radius float64) bool {
+func CheckCollision(entity1, entity2 *model.Entity, radius float64) bool {
 	return entity1.Pos.Add(entity2.Pos.Mul(-1)).Len() <= radius
 }

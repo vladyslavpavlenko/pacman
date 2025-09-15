@@ -1,33 +1,23 @@
-package menu
+package ui
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/vladyslavpavlenko/pacman/internal/config"
+	"github.com/vladyslavpavlenko/pacman/internal/view"
 )
 
-// GameState represents the current state of the game
-type GameState int
-
-const (
-	StateMenu GameState = iota
-	StatePlaying
-	StatePaused
-)
-
-// Menu represents the main menu system
-type Menu struct {
-	state          GameState
+type UI struct {
+	state          view.State
 	selectedOption int
 	selectedDiff   config.Difficulty
 	options        []string
 	difficulties   []config.Difficulty
 }
 
-// New creates a new menu instance
-func New() *Menu {
-	return &Menu{
-		state:          StateMenu,
+func New() *UI {
+	return &UI{
+		state:          view.StateMenu,
 		selectedOption: 0,
 		selectedDiff:   config.DifficultyMedium,
 		options: []string{
@@ -43,13 +33,11 @@ func New() *Menu {
 	}
 }
 
-// Update handles menu input and state transitions
-func (m *Menu) Update() (GameState, config.Difficulty, bool) {
-	if m.state != StateMenu {
+func (m *UI) Update() (view.State, config.Difficulty, bool) {
+	if m.state != view.StateMenu {
 		return m.state, m.selectedDiff, false
 	}
 
-	// Handle navigation
 	if inpututil.IsKeyJustPressed(ebiten.KeyUp) || inpututil.IsKeyJustPressed(ebiten.KeyW) {
 		m.selectedOption = (m.selectedOption - 1 + len(m.options)) % len(m.options)
 	}
@@ -57,48 +45,41 @@ func (m *Menu) Update() (GameState, config.Difficulty, bool) {
 		m.selectedOption = (m.selectedOption + 1) % len(m.options)
 	}
 
-	// Handle selection
 	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) || inpututil.IsKeyJustPressed(ebiten.KeySpace) {
 		switch m.selectedOption {
-		case 0: // Start Game
-			return StatePlaying, m.selectedDiff, true
-		case 1: // Difficulty selection
-			// Cycle through difficulties
+		case 0:
+			return view.StatePlaying, m.selectedDiff, true
+		case 1:
 			for i, diff := range m.difficulties {
 				if diff == m.selectedDiff {
 					m.selectedDiff = m.difficulties[(i+1)%len(m.difficulties)]
 					break
 				}
 			}
-		case 2: // Exit
-			return StateMenu, m.selectedDiff, true // Signal to exit
+		case 2:
+			return view.StateMenu, m.selectedDiff, true
 		}
 	}
 
 	return m.state, m.selectedDiff, false
 }
 
-// SetState sets the current game state
-func (m *Menu) SetState(state GameState) {
+func (m *UI) SetState(state view.State) {
 	m.state = state
 }
 
-// GetState returns the current game state
-func (m *Menu) GetState() GameState {
+func (m *UI) GetState() view.State {
 	return m.state
 }
 
-// GetSelectedOption returns the currently selected menu option
-func (m *Menu) GetSelectedOption() int {
+func (m *UI) GetSelectedOption() int {
 	return m.selectedOption
 }
 
-// GetSelectedDifficulty returns the currently selected difficulty
-func (m *Menu) GetSelectedDifficulty() config.Difficulty {
+func (m *UI) GetSelectedDifficulty() config.Difficulty {
 	return m.selectedDiff
 }
 
-// GetOptions returns the menu options
-func (m *Menu) GetOptions() []string {
+func (m *UI) GetOptions() []string {
 	return m.options
 }

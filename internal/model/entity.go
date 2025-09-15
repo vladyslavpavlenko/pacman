@@ -1,4 +1,4 @@
-package entities
+package model
 
 import (
 	"image/color"
@@ -7,7 +7,6 @@ import (
 	"github.com/vladyslavpavlenko/pacman/internal/types"
 )
 
-// Entity represents a game entity (player or ghost)
 type Entity struct {
 	Pos        types.Vector      // pixel center position
 	Dir        types.Vector      // normalized grid direction (up/down/left/right or zero)
@@ -19,8 +18,7 @@ type Entity struct {
 	IsPlayer   bool              // true if this is the player entity
 }
 
-type PlayerConfig struct {
-}
+type PlayerConfig struct{}
 
 func NewPlayer(spawnX, spawnY int, speed float64, color color.RGBA) *Entity {
 	return &Entity{

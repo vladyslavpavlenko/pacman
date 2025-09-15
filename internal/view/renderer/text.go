@@ -2,19 +2,22 @@ package renderer
 
 import (
 	"bytes"
+	_ "embed"
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
-	"golang.org/x/image/font/gofont/goregular"
 )
+
+//go:embed assets/emulogic_font.ttf
+var font []byte
 
 type TextRenderer struct {
 	faceSource *text.GoTextFaceSource
 }
 
 func NewTextRenderer() (*TextRenderer, error) {
-	faceSource, err := text.NewGoTextFaceSource(bytes.NewReader(goregular.TTF))
+	faceSource, err := text.NewGoTextFaceSource(bytes.NewReader(font))
 	if err != nil {
 		return nil, err
 	}

@@ -4,10 +4,9 @@ import (
 	"math/rand"
 
 	"github.com/vladyslavpavlenko/pacman/internal/config"
-	"github.com/vladyslavpavlenko/pacman/internal/logic/entities"
 	"github.com/vladyslavpavlenko/pacman/internal/logic/physics"
+	"github.com/vladyslavpavlenko/pacman/internal/model"
 	"github.com/vladyslavpavlenko/pacman/internal/types"
-	"github.com/vladyslavpavlenko/pacman/internal/visual/level"
 )
 
 // DistanceMap represents a 2D grid of distances from a target position
@@ -33,7 +32,7 @@ func NewDistanceMap(width, height int) *DistanceMap {
 }
 
 // BuildBFS builds a breadth-first search distance map from the target position
-func (dm *DistanceMap) BuildBFS(targetPos types.Vector, lvl *level.Level) {
+func (dm *DistanceMap) BuildBFS(targetPos types.Vector, lvl *model.Level) {
 	// Initialize all distances to infinity
 	const infinity = 1 << 30
 	for y := 0; y < dm.height; y++ {
@@ -99,7 +98,7 @@ type candidate struct {
 }
 
 // GhostAI implements the ghost artificial intelligence with different skill levels
-func GhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Level, skillLevel config.GhostLevel) {
+func GhostAI(ghost *model.Entity, distanceMap *DistanceMap, lvl *model.Level, skillLevel config.GhostLevel) {
 	switch skillLevel {
 	case config.GhostSkillLevelDumb:
 		dumbGhostAI(ghost, lvl)
@@ -115,10 +114,25 @@ func GhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Level,
 }
 
 // dumbGhostAI implements random movement (ignores player)
-func dumbGhostAI(ghost *entities.Entity, lvl *level.Level) {
+func dumbGhostAI(ghost *model.Entity, lvl *model.Level) {
 	// Only make decisions at intersections or when stopped
 	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(types.Vector{}) {
 		return
+	}
+
+	// Force movement if stuck for too long (emergency escape)
+	if ghost.Dir.Eq(types.Vector{}) {
+		// Try to move in any direction
+		tileX, tileY := physics.PosToTile(ghost.Pos)
+		for _, dir := range []types.Vector{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
+			nextX, nextY := tileX+int(dir.X), tileY+int(dir.Y)
+			if lvl.CanWalk(nextX, nextY) {
+				ghost.Dir = dir
+				ghost.WantDir = dir
+				ghost.Pos = physics.TileCenter(tileX, tileY)
+				return
+			}
+		}
 	}
 
 	tileX, tileY := physics.PosToTile(ghost.Pos)
@@ -138,7 +152,28 @@ func dumbGhostAI(ghost *entities.Entity, lvl *level.Level) {
 	checkDirection(0, -1) // up
 
 	if len(directions) == 0 {
+		// If no valid directions, try to continue in current direction if possible
+		if !ghost.Dir.Eq(types.Vector{}) {
+			nextX, nextY := tileX+int(ghost.Dir.X), tileY+int(ghost.Dir.Y)
+			if lvl.CanWalk(nextX, nextY) {
+				// Continue in current direction
+				ghost.Pos = physics.TileCenter(tileX, tileY)
+				return
+			}
+		}
+		// If still stuck, try to move in any direction (emergency escape)
+		for _, dir := range []types.Vector{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
+			nextX, nextY := tileX+int(dir.X), tileY+int(dir.Y)
+			if lvl.CanWalk(nextX, nextY) {
+				ghost.Dir = dir
+				ghost.WantDir = dir
+				ghost.Pos = physics.TileCenter(tileX, tileY)
+				return
+			}
+		}
+		// If truly stuck, stop
 		ghost.Dir = types.Vector{}
+		ghost.WantDir = types.Vector{}
 		return
 	}
 
@@ -150,7 +185,7 @@ func dumbGhostAI(ghost *entities.Entity, lvl *level.Level) {
 }
 
 // slowGhostAI implements AI that follows player but makes mistakes
-func slowGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Level) {
+func slowGhostAI(ghost *model.Entity, distanceMap *DistanceMap, lvl *model.Level) {
 	// Only make decisions at intersections or when stopped
 	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(types.Vector{}) {
 		return
@@ -167,7 +202,7 @@ func slowGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Le
 }
 
 // smartGhostAI implements optimized pathfinding with some prediction
-func smartGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Level) {
+func smartGhostAI(ghost *model.Entity, distanceMap *DistanceMap, lvl *model.Level) {
 	// Only make decisions at intersections or when stopped
 	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(types.Vector{}) {
 		return
@@ -235,7 +270,7 @@ func smartGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.L
 }
 
 // geniusGhostAI implements advanced AI with player movement prediction
-func geniusGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Level) {
+func geniusGhostAI(ghost *model.Entity, distanceMap *DistanceMap, lvl *model.Level) {
 	// Only make decisions at intersections or when stopped
 	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(types.Vector{}) {
 		return
@@ -325,7 +360,7 @@ func geniusGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.
 }
 
 // normalGhostAI implements standard BFS pathfinding
-func normalGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.Level) {
+func normalGhostAI(ghost *model.Entity, distanceMap *DistanceMap, lvl *model.Level) {
 	// Only make decisions at intersections or when stopped
 	if !physics.NearCenter(ghost.Pos) && !ghost.Dir.Eq(types.Vector{}) {
 		return
@@ -353,7 +388,18 @@ func normalGhostAI(ghost *entities.Entity, distanceMap *DistanceMap, lvl *level.
 	checkDirection(0, -1) // up
 
 	if len(options) == 0 {
+		// If no valid directions, try to continue in current direction if possible
+		if !ghost.Dir.Eq(types.Vector{}) {
+			nextX, nextY := tileX+int(ghost.Dir.X), tileY+int(ghost.Dir.Y)
+			if lvl.CanWalk(nextX, nextY) {
+				// Continue in current direction
+				ghost.Pos = physics.TileCenter(tileX, tileY)
+				return
+			}
+		}
+		// If still stuck, stop
 		ghost.Dir = types.Vector{}
+		ghost.WantDir = types.Vector{}
 		return
 	}
 

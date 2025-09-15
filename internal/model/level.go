@@ -1,10 +1,9 @@
-package level
+package model
 
 import (
 	"github.com/vladyslavpavlenko/pacman/internal/types"
 )
 
-// Tile represents a single tile type in the game
 type Tile byte
 
 const (
@@ -13,7 +12,6 @@ const (
 	TilePel   Tile = '.'
 )
 
-// Level represents the game level with its grid and properties
 type Level struct {
 	Grid         [][]Tile
 	Width        int
@@ -21,20 +19,20 @@ type Level struct {
 	TotalPellets int
 }
 
-// DefaultLevelData contains the default level layout
 var DefaultLevelData = []string{
-	"###################",
-	"#........#........#",
-	"#.###.###.#.###.###",
-	"#.................#",
-	"###.#.#####.#.#.###",
-	"#...#...#...#...#.#",
-	"#.#####.#.#####.#.#",
-	"#.................#",
-	"###################",
+	"#####################",
+	"#...................#",
+	"#.###.#.###.#.###.###",
+	"#.#...#...#...#...#.#",
+	"#.#.#####.#.#####.#.#",
+	"#...................#",
+	"#.###.#.###.#.###.###",
+	"#.#...#...#...#...#.#",
+	"#.#.#####.#.#####.#.#",
+	"#...................#",
+	"#####################",
 }
 
-// New creates a new level from the provided level data
 func New(levelData []string) *Level {
 	if len(levelData) == 0 {
 		levelData = DefaultLevelData
