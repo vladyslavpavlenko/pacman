@@ -64,9 +64,15 @@ var ghostClyde []byte
 //go:embed assets/ghosts/blue.png
 var ghostBlue []byte
 
+// Apple sprite
+//
+//go:embed assets/other/apple.png
+var appleSprite []byte
+
 type AnimationManager struct {
 	sprites      map[string][]*ebiten.Image
 	ghostSprites map[string]*ebiten.Image
+	appleSprite  *ebiten.Image
 }
 
 type AnimationEngine struct {
@@ -83,6 +89,7 @@ func NewAnimationManager() *AnimationManager {
 
 	am.loadSprites()
 	am.loadGhostSprites()
+	am.loadAppleSprite()
 	return am
 }
 
@@ -123,6 +130,10 @@ func (am *AnimationManager) loadGhostSprites() {
 	am.ghostSprites["inky"] = am.loadImageFromBytes(ghostInky)
 	am.ghostSprites["clyde"] = am.loadImageFromBytes(ghostClyde)
 	am.ghostSprites["blue"] = am.loadImageFromBytes(ghostBlue)
+}
+
+func (am *AnimationManager) loadAppleSprite() {
+	am.appleSprite = am.loadImageFromBytes(appleSprite)
 }
 
 func (am *AnimationManager) loadImageFromBytes(data []byte) *ebiten.Image {
@@ -180,6 +191,11 @@ func (am *AnimationManager) GetGhostSprite(ghostColor color.RGBA) *ebiten.Image 
 
 	// Default to blinky if color doesn't match
 	return am.ghostSprites["blinky"]
+}
+
+// GetAppleSprite returns the apple sprite
+func (am *AnimationManager) GetAppleSprite() *ebiten.Image {
+	return am.appleSprite
 }
 
 func NewAnimationEngine(framesPerStep int) *AnimationEngine {

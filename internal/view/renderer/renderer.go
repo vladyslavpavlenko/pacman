@@ -1,6 +1,7 @@
 package renderer
 
 import (
+	"fmt"
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -15,16 +16,18 @@ var (
 	ColorFloor  = color.RGBA{R: 10, G: 10, B: 10, A: 255}
 	ColorPellet = color.RGBA{R: 230, G: 230, B: 230, A: 255}
 	ColorPac    = color.RGBA{R: 255, G: 215, A: 255}
+	ColorApple  = color.RGBA{R: 255, G: 0, B: 0, A: 255}
 	ColorGhosts = []color.RGBA{
 		{R: 255, G: 64, B: 64, A: 255},
 		{R: 255, G: 128, B: 255, A: 255},
 		{R: 64, G: 255, B: 255, A: 255},
 		{R: 255, G: 128, B: 0, A: 255},
 	}
-	ColorMenuBackground = color.RGBA{R: 20, G: 20, B: 40, A: 255}
+	ColorMenuBackground = color.RGBA{R: 0, G: 0, B: 0, A: 255}
 	ColorMenuText       = color.RGBA{R: 255, G: 255, B: 255, A: 255}
 	ColorMenuSelected   = color.RGBA{R: 255, G: 215, B: 0, A: 255}
-	ColorMenuTitle      = color.RGBA{R: 255, G: 100, B: 100, A: 255}
+	ColorMenuTitle      = color.RGBA{R: 255, G: 215, B: 0, A: 255}
+	ColorSpeedBoost     = color.RGBA{R: 255, G: 255, B: 0, A: 255}
 )
 
 type Renderer struct {
@@ -73,25 +76,18 @@ func (r *Renderer) DrawLevel(screen *ebiten.Image, lvl *model.Level) {
 	}
 }
 
-func (r *Renderer) DrawEntity(screen *ebiten.Image, entity *model.Entity, frame int) {
-	if entity.IsPlayer {
-		r.DrawPlayer(screen, entity, frame)
-	} else {
-		r.DrawGhost(screen, entity)
-	}
+func (r *Renderer) DrawEntity(screen *ebiten.Image, entity *model.Ghost) {
+	r.DrawGhost(screen, entity)
 }
 
-func (r *Renderer) DrawPlayer(screen *ebiten.Image, entity *model.Entity, frame int) {
-	// Update last direction if player is moving
-	if entity.Dir.X != 0 || entity.Dir.Y != 0 {
-		r.LastPlayerDir = r.AnimationManager.GetDirectionFromVector(entity.Dir)
+func (r *Renderer) DrawPlayer(screen *ebiten.Image, player *model.Player) {
+	if player.Dir.X != 0 || player.Dir.Y != 0 {
+		r.LastPlayerDir = r.AnimationManager.GetDirectionFromVector(player.Dir)
 	}
 
-	// Use last direction for rendering (whether moving or stopped)
 	direction := r.LastPlayerDir
 
-	// Only animate when the player is actually moving
-	if entity.Dir.X != 0 || entity.Dir.Y != 0 {
+	if player.Dir.X != 0 || player.Dir.Y != 0 {
 		r.AnimationEngine.Update()
 		frameCount := r.AnimationManager.GetFrameCount(direction)
 		animationFrame := r.AnimationEngine.GetCurrentFrame(frameCount)
@@ -100,27 +96,24 @@ func (r *Renderer) DrawPlayer(screen *ebiten.Image, entity *model.Entity, frame 
 		if sprite != nil {
 			op := &ebiten.DrawImageOptions{}
 
-			// Center the sprite on the entity position
 			spriteW, spriteH := sprite.Size()
 			op.GeoM.Translate(
-				float64(entity.Pos.X)-float64(spriteW)/2,
-				float64(entity.Pos.Y)-float64(spriteH)/2,
+				float64(player.Pos.X)-float64(spriteW)/2,
+				float64(player.Pos.Y)-float64(spriteH)/2,
 			)
 
 			screen.DrawImage(sprite, op)
 		}
 	} else {
-		// When not moving, show the first frame (mouth closed) in the last direction
 		sprite := r.AnimationManager.GetSprite(direction, 0)
 
 		if sprite != nil {
 			op := &ebiten.DrawImageOptions{}
 
-			// Center the sprite on the entity position
 			spriteW, spriteH := sprite.Size()
 			op.GeoM.Translate(
-				float64(entity.Pos.X)-float64(spriteW)/2,
-				float64(entity.Pos.Y)-float64(spriteH)/2,
+				float64(player.Pos.X)-float64(spriteW)/2,
+				float64(player.Pos.Y)-float64(spriteH)/2,
 			)
 
 			screen.DrawImage(sprite, op)
@@ -128,44 +121,100 @@ func (r *Renderer) DrawPlayer(screen *ebiten.Image, entity *model.Entity, frame 
 	}
 }
 
-func (r *Renderer) DrawGhost(screen *ebiten.Image, entity *model.Entity) {
-	// Get the appropriate ghost sprite based on color
-	sprite := r.AnimationManager.GetGhostSprite(entity.Color)
+func (r *Renderer) DrawGhost(screen *ebiten.Image, ghost *model.Ghost) {
+	sprite := r.AnimationManager.GetGhostSprite(ghost.Color)
 
 	if sprite != nil {
 		op := &ebiten.DrawImageOptions{}
 
-		// Center the sprite on the entity position
 		spriteW, spriteH := sprite.Size()
 		op.GeoM.Translate(
-			float64(entity.Pos.X)-float64(spriteW)/2,
-			float64(entity.Pos.Y)-float64(spriteH)/2,
+			float64(ghost.Pos.X)-float64(spriteW)/2,
+			float64(ghost.Pos.Y)-float64(spriteH)/2,
 		)
 
 		screen.DrawImage(sprite, op)
 	} else {
-		// Fallback to circle if sprite not found
 		radius := float32(physics.TileSize/2 - 3)
 		vector.DrawFilledCircle(
 			screen,
-			float32(entity.Pos.X),
-			float32(entity.Pos.Y),
+			float32(ghost.Pos.X),
+			float32(ghost.Pos.Y),
 			radius,
-			entity.Color,
+			ghost.Color,
 			false,
 		)
 	}
 }
 
-func (r *Renderer) DrawGhosts(screen *ebiten.Image, ghosts []*model.Entity, frame int) {
-	for _, ghost := range ghosts {
-		r.DrawEntity(screen, ghost, frame)
+func (r *Renderer) DrawGhosts(screen *ebiten.Image, ghosts []*model.Ghost, debugMode bool, ghostAlgorithms []string) {
+	for i, ghost := range ghosts {
+		r.DrawGhost(screen, ghost)
+
+		if debugMode && i < len(ghostAlgorithms) {
+			algorithmName := ghostAlgorithms[i]
+			textX := int(ghost.Pos.X)
+			textY := int(ghost.Pos.Y) - 20
+
+			textWidth := len(algorithmName) * 6
+			textX -= textWidth / 2
+
+			r.TextRenderer.DrawText(screen, algorithmName, textX, textY, ColorSpeedBoost, 8)
+		}
+	}
+}
+
+func (r *Renderer) DrawApple(screen *ebiten.Image, apple *model.Apple) {
+	sprite := r.AnimationManager.GetAppleSprite()
+	if sprite != nil {
+		op := &ebiten.DrawImageOptions{}
+
+		spriteW, spriteH := sprite.Size()
+		op.GeoM.Translate(
+			float64(apple.Pos.X)-float64(spriteW)/2,
+			float64(apple.Pos.Y)-float64(spriteH)/2,
+		)
+
+		screen.DrawImage(sprite, op)
+	} else {
+		radius := float32(physics.TileSize/2 - 6)
+		vector.DrawFilledCircle(
+			screen,
+			float32(apple.Pos.X),
+			float32(apple.Pos.Y),
+			radius,
+			apple.Color,
+			false,
+		)
+	}
+}
+
+func (r *Renderer) DrawApples(screen *ebiten.Image, apples []*model.Apple) {
+	for _, apple := range apples {
+		r.DrawApple(screen, apple)
 	}
 }
 
 func (r *Renderer) DrawMenu(screen *ebiten.Image, menu *ui.UI, screenWidth, screenHeight int) {
 	screen.Fill(ColorMenuBackground)
 	r.drawMenu(screen, menu, screenWidth, screenHeight)
+}
+
+func (r *Renderer) DrawWinScreen(screen *ebiten.Image, score int, screenWidth, screenHeight int) {
+	screen.Fill(ColorMenuBackground)
+
+	winMsg := "YOU WIN!"
+	titleY := screenHeight / 3
+	leftMargin := screenWidth / 4
+	r.TextRenderer.DrawText(screen, winMsg, leftMargin, titleY, ColorMenuTitle, 32)
+
+	scoreMsg := fmt.Sprintf("Final Score: %d", score)
+	scoreY := screenHeight / 2
+	r.TextRenderer.DrawText(screen, scoreMsg, leftMargin, scoreY, ColorMenuText, 16)
+
+	instructions := "Press R to restart or ESC to return to menu"
+	instructionsY := screenHeight * 2 / 3
+	r.TextRenderer.DrawText(screen, instructions, leftMargin, instructionsY, ColorMenuText, 12)
 }
 
 func (r *Renderer) drawMenu(screen *ebiten.Image, menu *ui.UI, screenWidth, screenHeight int) {
@@ -175,7 +224,7 @@ func (r *Renderer) drawMenu(screen *ebiten.Image, menu *ui.UI, screenWidth, scre
 
 	options := menu.GetOptions()
 	startY := screenHeight/2 - 30
-	lineHeight := 60
+	lineHeight := 40
 
 	for i, option := range options {
 		y := startY + i*lineHeight
@@ -191,9 +240,14 @@ func (r *Renderer) drawMenu(screen *ebiten.Image, menu *ui.UI, screenWidth, scre
 		if i == menu.GetSelectedOption() {
 			textColor = ColorMenuSelected
 			fullText := "> " + displayText
-			r.TextRenderer.DrawText(screen, fullText, leftMargin, y, textColor, 18)
+			r.TextRenderer.DrawText(screen, fullText, leftMargin, y, textColor, 16)
 		} else {
-			r.TextRenderer.DrawText(screen, displayText, leftMargin, y, textColor, 18)
+			r.TextRenderer.DrawText(screen, displayText, leftMargin, y, textColor, 16)
 		}
 	}
+
+	// Draw copyright notice at the bottom
+	copyrightText := "(c) Vladyslav Pavlenko, TTP-41"
+	copyrightY := screenHeight - 30
+	r.TextRenderer.DrawText(screen, copyrightText, leftMargin, copyrightY, ColorMenuText, 10)
 }

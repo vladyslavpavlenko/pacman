@@ -2,6 +2,7 @@ package model
 
 import (
 	"github.com/vladyslavpavlenko/pacman/internal/types"
+	"image/color"
 )
 
 type Tile byte
@@ -10,6 +11,7 @@ const (
 	TileEmpty Tile = ' '
 	TileWall  Tile = '#'
 	TilePel   Tile = '.'
+	TileApple Tile = 'a'
 )
 
 type Level struct {
@@ -17,6 +19,7 @@ type Level struct {
 	Width        int
 	Height       int
 	TotalPellets int
+	Apples       []*Apple
 }
 
 var DefaultLevelData = []string{
@@ -41,6 +44,7 @@ func New(levelData []string) *Level {
 	level := &Level{
 		Width:  len(levelData[0]),
 		Height: len(levelData),
+		Apples: make([]*Apple, 0),
 	}
 
 	level.Grid = make([][]Tile, level.Height)
@@ -108,4 +112,34 @@ func (l *Level) GetDefaultSpawnPoints() (playerSpawn types.Tile, ghostSpawns []t
 		{X: l.Width / 2, Y: l.Height / 2},
 	}
 	return
+}
+
+// AddApple adds an apple to the level at the specified position
+func (l *Level) AddApple(x, y int, color color.RGBA) {
+	apple := NewApple(x, y, color)
+	// Position will be set by the caller using physics.TileCenter
+	l.Apples = append(l.Apples, apple)
+}
+
+// RemoveApple removes an apple from the level
+func (l *Level) RemoveApple(apple *Apple) {
+	for i, a := range l.Apples {
+		if a == apple {
+			l.Apples = append(l.Apples[:i], l.Apples[i+1:]...)
+			break
+		}
+	}
+}
+
+// GetWalkableTiles returns all walkable tile positions
+func (l *Level) GetWalkableTiles() []types.Tile {
+	var tiles []types.Tile
+	for y := 0; y < l.Height; y++ {
+		for x := 0; x < l.Width; x++ {
+			if l.CanWalk(x, y) {
+				tiles = append(tiles, types.Tile{X: x, Y: y})
+			}
+		}
+	}
+	return tiles
 }

@@ -19,7 +19,7 @@ func New() *UI {
 	return &UI{
 		state:          view.StateMenu,
 		selectedOption: 0,
-		selectedDiff:   config.DifficultyMedium,
+		selectedDiff:   config.DifficultyEasy,
 		options: []string{
 			"Start Game",
 			"Difficulty: ",
